@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, send_from_directory, abort
 from flask_socketio import SocketIO, emit
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
@@ -7,7 +7,7 @@ from cryptography.hazmat.backends import default_backend
 import base64
 import os
 
-app = Flask(__name__, static_folder='frontend', template_folder='frontend')
+app = Flask(__name__, static_folder='frontend')
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Store user public keys and sessions
@@ -48,42 +48,53 @@ def decrypt_message(private_key, encrypted_message):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    try:
+        return send_from_directory(app.static_folder, 'index.html')
+    except FileNotFoundError:
+        abort(404, description="index.html not found in frontend directory")
+    except Exception as e:
+        abort(500, description=f"Server error: {str(e)}")
 
 @socketio.on('register')
 def handle_register(data):
-    username = data.get('username')  # Use .get() to avoid KeyError if data is malformed
-    if not username:
-        emit('error', {'message': 'Username is required'})
+    username = data.get('username')
+    if not username or not isinstance(username, str):
+        emit('error', {'message': 'Valid username is required'})
         return
-    private_key, public_key = generate_key_pair()
-    public_key_pem = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-    ).decode('utf-8')
-    private_keys[username] = private_key
-    public_keys[username] = public_key_pem
-    users[username] = {'public_key': public_key_pem}
-    emit('register_success', {'username': username, 'public_key': public_key_pem})
+    try:
+        private_key, public_key = generate_key_pair()
+        public_key_pem = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ).decode('utf-8')
+        private_keys[username] = private_key
+        public_keys[username] = public_key_pem
+        users[username] = {'public_key': public_key_pem}
+        emit('register_success', {'username': username, 'public_key': public_key_pem})
+    except Exception as e:
+        emit('error', {'message': f'Registration failed: {str(e)}'})
 
 @socketio.on('send_message')
 def handle_send_message(data):
     sender = data.get('sender')
     receiver = data.get('receiver')
     message = data.get('message')
-    if not all([sender, receiver, message]):
-        emit('error', {'message': 'Sender, receiver, and message are required'})
+    if not all([sender, receiver, message]) or not all(isinstance(x, str) for x in [sender, receiver, message]):
+        emit('error', {'message': 'Valid sender, receiver, and message are required'})
         return
-    if receiver in public_keys:
-        encrypted_msg = encrypt_message(serialization.load_pem_public_key(public_keys[receiver].encode()), message)
-        emit('new_message', {'sender': sender, 'message': encrypted_msg}, room=receiver)
-    else:
-        emit('error', {'message': 'Receiver not found'})
+    try:
+        if receiver in public_keys:
+            encrypted_msg = encrypt_message(serialization.load_pem_public_key(public_keys[receiver].encode()), message)
+            emit('new_message', {'sender': sender, 'message': encrypted_msg}, room=receiver)
+        else:
+            emit('error', {'message': 'Receiver not found'})
+    except Exception as e:
+        emit('error', {'message': f'Message failed: {str(e)}'})
 
 @socketio.on('connect')
 def handle_connect():
     emit('connected', {'message': 'Connected to SecureChat'})
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))  # Heroku sets PORT, default to 5000 for local
+    port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=True)

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureChat</title>
+    <!-- Warning: cdn.tailwindcss.com is used for development only. For production, install Tailwind CSS as a PostCSS plugin or use Tailwind CLI: https://tailwindcss.com/docs/installation -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6.26.0/babel.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #root {
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const SecureChat = () => {
+            const [showRegister, setShowRegister] = React.useState(false);
+            const [showLogin, setShowLogin] = React.useState(false);
+            const [username, setUsername] = React.useState('');
+            const [currentUser, setCurrentUser] = React.useState(null);
+            const socket = io('http://localhost:5000'); // Ensure this matches the backend port
+
+            React.useEffect(() => {
+                socket.on('connect', () => console.log('Connected to SecureChat'));
+                socket.on('register_success', (data) => {
+                    console.log('Success:', data); // Debug log
+                    setCurrentUser(data.username);
+                    alert(`Registered as ${data.username} with public key: ${data.public_key}`);
+                });
+                socket.on('new_message', (data) => {
+                    console.log(`New message from ${data.sender}: ${data.message}`);
+                });
+                socket.on('error', (data) => alert(data.message));
+
+                return () => {
+                    socket.off('connect');
+                    socket.off('register_success');
+                    socket.off('new_message');
+                    socket.off('error');
+                };
+            }, []);
+
+            const handleRegister = () => {
+                if (username) {
+                    console.log('Registering:', username); // Debug log
+                    socket.emit('register', { username });
+                    setUsername('');
+                    setShowRegister(false);
+                } else {
+                    alert('Please enter a username');
+                }
+            };
+
+            const handleSendMessage = () => {
+                if (!currentUser) return alert('Please register first');
+                const receiver = prompt('Enter receiver username:');
+                const message = prompt('Enter your message:');
+                if (receiver && message) {
+                    socket.emit('send_message', { sender: currentUser, receiver, message });
+                }
+            };
+
+            return (
+                <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-purple-900 to-indigo-700">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md transform transition-all duration-300 hover:shadow-3xl">
+                        <div className="text-center mb-6">
+                            <i className="fas fa-shield-alt text-blue-600 text-3xl mb-2"></i>
+                            <h2 className="text-3xl font-bold text-gray-800">SecureChat</h2>
+                            <p className="text-indigo-600 font-medium">End-to-End Encrypted Messaging</p>
+                        </div>
+                        <div className="flex justify-center space-x-4 mb-6">
+                            <button
+                                onClick={() => { setShowRegister(true); setShowLogin(false); }}
+                                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition duration-200"
+                            >
+                                ✚ Register
+                            </button>
+                            <button
+                                onClick={() => { setShowLogin(true); setShowRegister(false); }}
+                                className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition duration-200"
+                            >
+                                🔒 Login
+                            </button>
+                        </div>
+                        {showRegister && (
+                            <div className="animate-fadeIn">
+                                <h3 className="text-xl font-semibold text-gray-700 mb-2">Create Account</h3>
+                                <p className="text-gray-500 mb-4">Generate your RSA key pair and join the secure chat</p>
+                                <div className="space-y-4">
+                                    <input
+                                        type="text"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                        placeholder="Enter your username"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <button
+                                        onClick={handleRegister}
+                                        className="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-200"
+                                    >
+                                        ✚ Generate Keys & Register
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        {showLogin && (
+                            <div className="animate-fadeIn">
+                                <h3 className="text-xl font-semibold text-gray-700 mb-2">Welcome Back</h3>
+                                <p className="text-gray-500 mb-4">Login with your existing credentials</p>
+                                <div className="space-y-4">
+                                    <input
+                                        type="text"
+                                        placeholder="Enter your username"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <button
+                                        className="w-full bg-gray-500 text-white p-3 rounded-lg hover:bg-gray-600 transition duration-200"
+                                    >
+                                        🔒 Login
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        <div className="mt-6 text-left pl-4">
+                            <i className="fas fa-shield-alt text-blue-600 mr-2"></i>
+                            <p className="text-gray-700 font-medium">Security Features:</p>
+                            <ul className="list-disc pl-5 text-gray-600">
+                                <li>RSA-2048 key pair generation</li>
+                                <li>AES-256 message encryption</li>
+                                <li>End-to-end encryption</li>
+                                <li>Encrypted message storage</li>
+                            </ul>
+                        </div>
+                        {currentUser && (
+                            <button
+                                onClick={handleSendMessage}
+                                className="mt-6 w-full bg-green-600 text-white p-3 rounded-lg hover:bg-green-700 transition duration-200"
+                            >
+                                Send Message
+                            </button>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<SecureChat />, document.getElementById('root'));
+    </script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .animate-fadeIn {
+            animation: fadeIn 0.3s ease-in;
+        }
+    </style>
+</body>
+</html>
