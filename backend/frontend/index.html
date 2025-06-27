@@ -29,69 +29,110 @@
         const SecureChat = () => {
             const [showRegister, setShowRegister] = React.useState(false);
             const [showLogin, setShowLogin] = React.useState(false);
-            const [username, setUsername] = React.useState('');
+            const [registerUsername, setRegisterUsername] = React.useState('');
+            const [loginUsername, setLoginUsername] = React.useState('');
             const [currentUser, setCurrentUser] = React.useState(null);
             const socket = io('https://secure-chat-lar5.onrender.com');
+
             React.useEffect(() => {
                 socket.on('connect', () => console.log('Connected to SecureChat'));
+
                 socket.on('register_success', (data) => {
                     setCurrentUser(data.username);
-                    alert(`Registered as ${data.username} with public key: ${data.public_key}`);
+                    alert(`Registered as ${data.username} with public key: ${data.public_key.substring(0, 50)}...`);
+                    setShowRegister(false);
+                    setShowLogin(false);
                 });
+
+                socket.on('login_success', (data) => {
+                    setCurrentUser(data.username);
+                    alert(`Logged in as ${data.username}.`);
+                    setShowLogin(false);
+                    setShowRegister(false);
+                });
+
                 socket.on('new_message', (data) => {
                     console.log(`New message from ${data.sender}: ${data.message}`);
+                    alert(`New message from ${data.sender}: ${data.message}`);
                 });
-                socket.on('error', (data) => alert(data.message));
+
+                socket.on('error', (data) => {
+                    alert(data.message);
+                    console.error('Server Error:', data.message);
+                });
 
                 return () => {
                     socket.off('connect');
                     socket.off('register_success');
+                    socket.off('login_success');
                     socket.off('new_message');
                     socket.off('error');
                 };
             }, []);
 
             const handleRegister = () => {
-                if (username) {
-                    socket.emit('register', { username });
-                    setUsername('');
-                    setShowRegister(false);
+                if (registerUsername) {
+                    socket.emit('register', { username: registerUsername });
+                    setRegisterUsername('');
                 } else {
-                    alert('Please enter a username');
+                    alert('Please enter a username for registration');
+                }
+            };
+
+            const handleLogin = () => {
+                if (loginUsername) {
+                    socket.emit('login', { username: loginUsername });
+                    setLoginUsername('');
+                } else {
+                    alert('Please enter a username for login');
                 }
             };
 
             const handleSendMessage = () => {
-                if (!currentUser) return alert('Please register first');
-                const receiver = prompt('Enter receiver username:');
-                const message = prompt('Enter your message:');
-                if (receiver && message) {
-                    socket.emit('send_message', { sender: currentUser, receiver, message });
+                if (!currentUser) {
+                    alert('Please register or login first to send messages.');
+                    return;
                 }
+                const receiver = prompt('Enter receiver username:');
+                if (!receiver) {
+                    alert('Receiver username cannot be empty.');
+                    return;
+                }
+                const message = prompt('Enter your message:');
+                if (!message) {
+                    alert('Message cannot be empty.');
+                    return;
+                }
+                socket.emit('send_message', { sender: currentUser, receiver, message });
             };
 
             return (
-                <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-purple-900 to-indigo-700">
+                <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-teal-600 to-teal-800">
                     <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md transform transition-all duration-300 hover:shadow-3xl">
                         <div className="text-center mb-6">
-                            <i className="fas fa-shield-alt text-blue-600 text-3xl mb-2"></i>
+                            <i className="fas fa-shield-alt text-teal-600 text-3xl mb-2"></i>
                             <h2 className="text-3xl font-bold text-gray-800">SecureChat</h2>
-                            <p className="text-indigo-600 font-medium">End-to-End Encrypted Messaging</p>
+                            <p className="text-teal-700 font-medium">End-to-End Encrypted Messaging</p>
                         </div>
                         <div className="flex justify-center space-x-4 mb-6">
                             <button
                                 onClick={() => { setShowRegister(true); setShowLogin(false); }}
-                                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition duration-200"
+                                className="bg-teal-500 text-white px-6 py-2 rounded-lg hover:bg-teal-600 transition duration-200"
                             >
                                 ✚ Register
                             </button>
                             <button
                                 onClick={() => { setShowLogin(true); setShowRegister(false); }}
-                                className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition duration-200"
+                                className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition duration-200"
                             >
                                 🔒 Login
                             </button>
                         </div>
+                        {currentUser && (
+                            <div className="text-center mb-4 text-green-600 font-semibold">
+                                Logged in as: {currentUser}
+                            </div>
+                        )}
                         {showRegister && (
                             <div className="animate-fadeIn">
                                 <h3 className="text-xl font-semibold text-gray-700 mb-2">Create Account</h3>
@@ -99,14 +140,14 @@
                                 <div className="space-y-4">
                                     <input
                                         type="text"
-                                        value={username}
-                                        onChange={(e) => setUsername(e.target.value)}
+                                        value={registerUsername}
+                                        onChange={(e) => setRegisterUsername(e.target.value)}
                                         placeholder="Enter your username"
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                                     />
                                     <button
                                         onClick={handleRegister}
-                                        className="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-200"
+                                        className="w-full bg-teal-500 text-white p-3 rounded-lg hover:bg-teal-600 transition duration-200"
                                     >
                                         ✚ Generate Keys & Register
                                     </button>
@@ -120,11 +161,14 @@
                                 <div className="space-y-4">
                                     <input
                                         type="text"
+                                        value={loginUsername}
+                                        onChange={(e) => setLoginUsername(e.target.value)}
                                         placeholder="Enter your username"
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                                     />
                                     <button
-                                        className="w-full bg-gray-500 text-white p-3 rounded-lg hover:bg-gray-600 transition duration-200"
+                                        onClick={handleLogin}
+                                        className="w-full bg-gray-600 text-white p-3 rounded-lg hover:bg-gray-700 transition duration-200"
                                     >
                                         🔒 Login
                                     </button>
@@ -132,7 +176,7 @@
                             </div>
                         )}
                         <div className="mt-6 text-left pl-4">
-                            <i className="fas fa-shield-alt text-blue-600 mr-2"></i>
+                            <i className="fas fa-shield-alt text-teal-600 mr-2"></i>
                             <p className="text-gray-700 font-medium">Security Features:</p>
                             <ul className="list-disc pl-5 text-gray-600">
                                 <li>RSA-2048 key pair generation</li>
