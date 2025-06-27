@@ -32,7 +32,6 @@
             const [username, setUsername] = React.useState('');
             const [currentUser, setCurrentUser] = React.useState(null);
             const socket = io('https://secure-chat-lar5.onrender.com');
-
             React.useEffect(() => {
                 socket.on('connect', () => console.log('Connected to SecureChat'));
                 socket.on('register_success', (data) => {
